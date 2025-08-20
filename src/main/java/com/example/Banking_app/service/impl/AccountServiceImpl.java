@@ -1,76 +1,103 @@
 package com.example.Banking_app.service.impl;
-import lombok.AllArgsConstructor;
-import java.util.List;
-import org.springframework.stereotype.Service;
-import com.example.Banking_app.Dto.AccountDto;
+
+import com.example.Banking_app.dto.AccountDto;
+import com.example.Banking_app.dto.TransactionDto;
 import com.example.Banking_app.entity.Account;
+import com.example.Banking_app.entity.Customer;
+import com.example.Banking_app.entity.Transaction;
 import com.example.Banking_app.mapper.AccountMapper;
+import com.example.Banking_app.mapper.TransactionMapper;
 import com.example.Banking_app.repository.AccountRepository;
+import com.example.Banking_app.repository.CustomerRepository;
+import com.example.Banking_app.repository.TransactionRepository;
 import com.example.Banking_app.service.AccountService;
-import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
 @Service
-@AllArgsConstructor
 public class AccountServiceImpl implements AccountService {
 
-    private AccountRepository accountRepository;
+    private final AccountRepository accountRepository;
+    private final CustomerRepository customerRepository;
+    private final TransactionRepository transactionRepository;
+
+    public AccountServiceImpl(AccountRepository accountRepository, CustomerRepository customerRepository,
+                              TransactionRepository transactionRepository) {
+        this.accountRepository = accountRepository;
+        this.customerRepository = customerRepository;
+        this.transactionRepository = transactionRepository;
+    }
 
     @Override
-    public AccountDto createAccount(AccountDto accountDto) {
-        Account account = AccountMapper.mapToAccount(accountDto);
-        Account savedAccount = accountRepository.save(account);
-        return AccountMapper.mapToAccountDto(savedAccount);
+    public AccountDto createAccountForCustomer(Long customerId, AccountDto dto) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        Account account = AccountMapper.toEntity(dto);
+        account.setCustomer(customer);
+        account.setAccountNumber(UUID.randomUUID().toString()); // generate unique number
+        return AccountMapper.toDto(accountRepository.save(account));
     }
 
     @Override
     public AccountDto getAccountById(Long id) {
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
-        return AccountMapper.mapToAccountDto(account);
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+        return AccountMapper.toDto(account);
     }
 
     @Override
-    public AccountDto Deposit(Long id, Double amount) {
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
+    @Transactional
+    public AccountDto deposit(Long accountId, double amount) {
+        if (amount <= 0) throw new RuntimeException("Amount must be positive");
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
         account.setBalance(account.getBalance() + amount);
-        Account updatedAccount = accountRepository.save(account);
-        return AccountMapper.mapToAccountDto(updatedAccount);
+
+        Transaction tx = Transaction.builder()
+                .type("DEPOSIT")
+                .amount(amount)
+                .timestamp(OffsetDateTime.now())
+                .balanceAfter(account.getBalance())
+                .account(account)
+                .build();
+        transactionRepository.save(tx);
+        accountRepository.save(account);
+
+        return AccountMapper.toDto(account);
     }
 
-
     @Override
-    public AccountDto Withdraw(Long id, Double amount) {
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
-        if (account.getBalance() < amount) {
-            throw new RuntimeException("Insufficient balance for withdrawal");
-        }
+    @Transactional
+    public AccountDto withdraw(Long accountId, double amount) {
+        if (amount <= 0) throw new RuntimeException("Amount must be positive");
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+        if (account.getBalance() < amount) throw new RuntimeException("Insufficient funds");
+
         account.setBalance(account.getBalance() - amount);
-        Account updatedAccount = accountRepository.save(account);
-        return AccountMapper.mapToAccountDto(updatedAccount);
+
+        Transaction tx = Transaction.builder()
+                .type("WITHDRAWAL")
+                .amount(amount)
+                .timestamp(OffsetDateTime.now())
+                .balanceAfter(account.getBalance())
+                .account(account)
+                .build();
+        transactionRepository.save(tx);
+        accountRepository.save(account);
+
+        return AccountMapper.toDto(account);
     }
 
     @Override
-    public List<AccountDto> GetAllAccounts() {
-    List<Account> accounts = accountRepository.findAll();
-    return accounts.stream()
-            .map(AccountMapper::mapToAccountDto)
-            .collect(Collectors.toList());
-    }    
-            
-    @Override
-    public AccountDto DeleteAccount(Long id) {
-        Account account = accountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Account not found with id: " + id));
-        accountRepository.delete(account);
-        return AccountMapper.mapToAccountDto(account);
+    public Page<TransactionDto> getTransactions(Long accountId, Pageable pageable) {
+        return transactionRepository.findByAccountId(accountId, pageable)
+                .map(TransactionMapper::toDto);
     }
-
-
-
-
-
-
 }
-
-

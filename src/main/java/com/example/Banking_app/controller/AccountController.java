@@ -1,56 +1,47 @@
 package com.example.Banking_app.controller;
 
-import lombok.AllArgsConstructor;
-import org.springframework.http.HttpStatus;
+import com.example.Banking_app.dto.AccountDto;
+import com.example.Banking_app.dto.TransactionDto;
+import com.example.Banking_app.service.AccountService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
-import com.example.Banking_app.Dto.AccountDto;
-import com.example.Banking_app.service.AccountService;
-import java.util.List;
-@AllArgsConstructor
+
 @RestController
-@RequestMapping("/api/account")
+@RequestMapping("/api/accounts")
 public class AccountController {
 
-    private AccountService accountService;
+    private final AccountService accountService;
 
-   @PostMapping
-   public ResponseEntity<AccountDto> createAccount( @RequestBody AccountDto accountDto) {
-             return new ResponseEntity<>(accountService.createAccount(accountDto) , HttpStatus.CREATED);
-   }
+    public AccountController(AccountService accountService) {
+        this.accountService = accountService;
+    }
+
+    @PostMapping("/customer/{customerId}")
+    public ResponseEntity<AccountDto> createAccountForCustomer(@PathVariable Long customerId, @RequestBody AccountDto dto) {
+        return ResponseEntity.ok(accountService.createAccountForCustomer(customerId, dto));
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<AccountDto> getAccountById(@PathVariable Long id) {
-        AccountDto accountDto = accountService.getAccountById(id);
-        return new ResponseEntity<>(accountDto, HttpStatus.OK);
+        return ResponseEntity.ok(accountService.getAccountById(id));
     }
 
-    @PostMapping("/deposit/{id}")
-    public ResponseEntity<AccountDto> deposit(@PathVariable Long id, @RequestBody Map<String, Double> request) {
-    Double amount = request.get("amount");
-    AccountDto updatedAccount = accountService.Deposit(id, amount);
-    return new ResponseEntity<>(updatedAccount, HttpStatus.OK);
+    @PostMapping("/{id}/deposit")
+    public ResponseEntity<AccountDto> deposit(@PathVariable Long id, @RequestBody Map<String, Double> payload) {
+        return ResponseEntity.ok(accountService.deposit(id, payload.get("amount")));
     }
 
-
-    @PostMapping("/withdraw/{id}")
-    public ResponseEntity<AccountDto> withdraw(@PathVariable Long id, @RequestBody Map<String, Double> request) {
-        Double amount = request.get("amount");
-        AccountDto updatedAccount = accountService.Withdraw(id, amount);
-        return new ResponseEntity<>(updatedAccount, HttpStatus.OK);
+    @PostMapping("/{id}/withdraw")
+    public ResponseEntity<AccountDto> withdraw(@PathVariable Long id, @RequestBody Map<String, Double> payload) {
+        return ResponseEntity.ok(accountService.withdraw(id, payload.get("amount")));
     }
 
-    @GetMapping("/all")
-    public ResponseEntity<List<AccountDto>> getAllAccounts() {
-        List<AccountDto> accounts = accountService.GetAllAccounts();
-        return new ResponseEntity<>(accounts, HttpStatus.OK);
+    @GetMapping("/{id}/transactions")
+    public ResponseEntity<Page<TransactionDto>> getTransactions(@PathVariable Long id, Pageable pageable) {
+        return ResponseEntity.ok(accountService.getTransactions(id, pageable));
     }
-
-    @DeleteMapping("/delete/{id}")
-    public ResponseEntity<String> deleteAccount(@PathVariable Long id) {
-        AccountDto deletedAccount = accountService.DeleteAccount(id);
-        return ResponseEntity.ok("Account deleted successfully: " + deletedAccount.id());
-    }
-
 }
